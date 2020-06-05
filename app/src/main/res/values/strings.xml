@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Music App</string>
+    <string name="menu_text">Settings</string>
+    <string name="night_mode">Night Mode</string>
+
+
+</resources>
