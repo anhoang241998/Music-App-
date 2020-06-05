@@ -6,4 +6,7 @@
     <color name="colorBackground">#000000</color>
     <color name="colorTextPrimary">#FFFFFF</color>
     <color name="colorTextSecondary">#BDBDBD</color>
+
+    <color name="colorProgressBackground">#FFFFFF</color>
+    <color name="colorSecondProgressBackground">#BDBDBD</color>
 </resources>
