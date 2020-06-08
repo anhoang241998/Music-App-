@@ -9,16 +9,25 @@
         android:roundIcon="@mipmap/logo"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
-        <activity android:name=".SettingsActivity"
-            android:parentActivityName=".PlayerActivity">
-        </activity>
-        <activity android:name=".PlayerActivity"
+
+
+        <activity
+            android:name=".SplashActivity"
             android:theme="@style/AppTheme.Launcher">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+        </activity>
+        <activity
+            android:name=".PlayerActivity"
+            android:theme="@style/AppTheme">
+        </activity>
+
+        <activity
+            android:name=".SettingsActivity"
+            android:parentActivityName=".PlayerActivity">
         </activity>
     </application>
 

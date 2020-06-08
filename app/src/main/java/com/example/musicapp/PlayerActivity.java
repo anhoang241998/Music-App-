@@ -12,6 +12,7 @@ import android.view.MenuItem;
 import android.widget.Button;
 import android.widget.SeekBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -40,7 +41,6 @@ public class PlayerActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        setTheme(R.style.AppTheme);
         super.onCreate(savedInstanceState);
         mAppSettingPrefs = getSharedPreferences("AppSettingPrefs", 0);
         isNightModeOn = mAppSettingPrefs.getBoolean("NightMode", false);
@@ -140,6 +140,7 @@ public class PlayerActivity extends AppCompatActivity {
         switch (item.getItemId()) {
             case R.id.menu_item_setting:
                 Intent intent = new Intent(PlayerActivity.this, SettingsActivity.class);
+                intent.putExtra("duration", mSong.getCurrentPosition());
                 startActivity(intent);
         }
         return super.onOptionsItemSelected(item);
