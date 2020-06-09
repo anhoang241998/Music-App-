@@ -1,8 +1,10 @@
 package com.example.musicapp;
 
 import android.annotation.SuppressLint;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.os.Bundle;
 import android.os.Handler;
@@ -17,6 +19,9 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
+import androidx.core.content.ContextCompat;
+
+import com.example.musicapp.service.MusicService;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
@@ -37,16 +42,44 @@ public class PlayerActivity extends AppCompatActivity {
 
     private SharedPreferences mAppSettingPrefs;
     private Boolean isNightModeOn;
+    private AudioManager mAudioManager;
+    private boolean gotFocus;
+    private Intent mIntent;
 
+    private AudioManager.OnAudioFocusChangeListener mOnAudioFocusChangeListener = new AudioManager.OnAudioFocusChangeListener() {
+        @Override
+        public void onAudioFocusChange(int focusChange) {
+            switch (focusChange) {
+                case (AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK):
+                    mSong.setVolume(0.2f, 0.2f);
+                    break;
+                case (AudioManager.AUDIOFOCUS_LOSS_TRANSIENT):
+                    mSong.stop();
+                    break;
+                case (AudioManager.AUDIOFOCUS_LOSS):
+                    mSong.pause();
+                    mBtnPlay.setBackgroundResource(R.drawable.ic_play);
+                    break;
+                case (AudioManager.AUDIOFOCUS_GAIN):
+                    mSong.start();
+                    mSong.setVolume(1f, 1f);
+                    break;
+                default:
+                    break;
+            }
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        overridePendingTransition(R.anim.fade_in,R.anim.fade_out);
         mAppSettingPrefs = getSharedPreferences("AppSettingPrefs", 0);
         isNightModeOn = mAppSettingPrefs.getBoolean("NightMode", false);
         setContentView(R.layout.activity_player);
         ButterKnife.bind(this);
 
+        mAudioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         mSong = MediaPlayer.create(this, R.raw.when_night_falls);
         mSong.setLooping(true);
         mSong.seekTo(0);
@@ -58,14 +91,19 @@ public class PlayerActivity extends AppCompatActivity {
             AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
         }
 
-
         mBtnPlay.setOnClickListener(v -> {
             if (!mSong.isPlaying()) {
-                mSong.start();
-                mBtnPlay.setBackgroundResource(R.drawable.ic_pause);
+                gotFocus = requestAudioFocusForMyApp(PlayerActivity.this);
+                if (gotFocus) {
+                    startService();
+                    mSong.start();
+                    Toast.makeText(this, "hello", Toast.LENGTH_SHORT).show();
+                    mBtnPlay.setBackgroundResource(R.drawable.ic_pause);
+                }
             } else {
                 mSong.pause();
                 mBtnPlay.setBackgroundResource(R.drawable.ic_play);
+//                releaseAudioFocusForMyApp(PlayerActivity.this);
             }
         });
 
@@ -104,6 +142,20 @@ public class PlayerActivity extends AppCompatActivity {
         }).start();
     }
 
+    private boolean requestAudioFocusForMyApp(final Context context) {
+        mAudioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+        int result = mAudioManager.requestAudioFocus(mOnAudioFocusChangeListener,
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN);
+        return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+    }
+
+//    void releaseAudioFocusForMyApp(final Context context) {
+//        mAudioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+//        mAudioManager.abandonAudioFocus(mOnAudioFocusChangeListener);
+//    }
+
+
     @SuppressLint("HandlerLeak")
     private Handler handler = new Handler() {
         @SuppressLint("SetTextI18n")
@@ -137,12 +189,21 @@ public class PlayerActivity extends AppCompatActivity {
 
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
-        switch (item.getItemId()) {
-            case R.id.menu_item_setting:
-                Intent intent = new Intent(PlayerActivity.this, SettingsActivity.class);
-                intent.putExtra("duration", mSong.getCurrentPosition());
-                startActivity(intent);
+        if (item.getItemId() == R.id.menu_item_setting) {
+            Intent intent = new Intent(PlayerActivity.this, SettingsActivity.class);
+            intent.putExtra("duration", mSong.getCurrentPosition());
+            startActivity(intent);
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    public void startService() {
+        mIntent = new Intent(PlayerActivity.this, MusicService.class);
+        ContextCompat.startForegroundService(PlayerActivity.this,mIntent);
+    }
+
+    public void stopService(){
+        mIntent = new Intent(PlayerActivity.this, MusicService.class);
+        stopService(mIntent);
     }
 }
