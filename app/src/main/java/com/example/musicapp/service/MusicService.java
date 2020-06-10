@@ -3,11 +3,13 @@ package com.example.musicapp.service;
 import android.app.Notification;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.Context;
 import android.content.Intent;
 import android.os.IBinder;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
+import androidx.core.content.ContextCompat;
 
 import com.example.musicapp.PlayerActivity;
 import com.example.musicapp.R;
@@ -15,6 +17,8 @@ import com.example.musicapp.R;
 import static com.example.musicapp.notification.MusicNotification.CHANNEL_ID;
 
 public class MusicService extends Service {
+
+    Intent mIntent;
 
     @Override
     public void onCreate() {

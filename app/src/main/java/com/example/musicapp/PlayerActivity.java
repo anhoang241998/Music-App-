@@ -1,5 +1,6 @@
 package com.example.musicapp;
 
+import android.animation.ObjectAnimator;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.Intent;
@@ -11,10 +12,12 @@ import android.os.Handler;
 import android.os.Message;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
+import android.view.animation.Animation;
+import android.view.animation.LinearInterpolator;
 import android.widget.Button;
 import android.widget.SeekBar;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -25,6 +28,7 @@ import com.example.musicapp.service.MusicService;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
+import de.hdodenhof.circleimageview.CircleImageView;
 
 public class PlayerActivity extends AppCompatActivity {
 
@@ -36,9 +40,11 @@ public class PlayerActivity extends AppCompatActivity {
     SeekBar mTimelineSeekBar;
     @BindView(R.id.btn_play)
     Button mBtnPlay;
+    @BindView(R.id.img)
+    CircleImageView mMusicImage;
 
     private MediaPlayer mSong;
-    private int mSongTotalTime;
+    private int mSongTotalTime, mRotating = 1;
 
     private SharedPreferences mAppSettingPrefs;
     private Boolean isNightModeOn;
@@ -70,10 +76,11 @@ public class PlayerActivity extends AppCompatActivity {
         }
     };
 
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        overridePendingTransition(R.anim.fade_in,R.anim.fade_out);
+        overridePendingTransition(R.anim.fade_in, R.anim.fade_out);
         mAppSettingPrefs = getSharedPreferences("AppSettingPrefs", 0);
         isNightModeOn = mAppSettingPrefs.getBoolean("NightMode", false);
         setContentView(R.layout.activity_player);
@@ -84,6 +91,10 @@ public class PlayerActivity extends AppCompatActivity {
         mSong.setLooping(true);
         mSong.seekTo(0);
         mSongTotalTime = mSong.getDuration();
+
+        final ObjectAnimator mAnimator = ObjectAnimator.ofFloat(mMusicImage, View.ROTATION, 0f, 360f);
+        mAnimator.setDuration(30000).setRepeatCount(Animation.INFINITE);
+        mAnimator.setInterpolator(new LinearInterpolator());
 
         if (isNightModeOn) {
             AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES);
@@ -97,12 +108,18 @@ public class PlayerActivity extends AppCompatActivity {
                 if (gotFocus) {
                     startService();
                     mSong.start();
-                    Toast.makeText(this, "hello", Toast.LENGTH_SHORT).show();
                     mBtnPlay.setBackgroundResource(R.drawable.ic_pause);
+                    if (mRotating == 1) {
+                        mRotating = 2;
+                        mAnimator.start();
+                    } else {
+                        mAnimator.resume();
+                    }
                 }
             } else {
                 mSong.pause();
                 mBtnPlay.setBackgroundResource(R.drawable.ic_play);
+                mAnimator.pause();
 //                releaseAudioFocusForMyApp(PlayerActivity.this);
             }
         });
@@ -140,6 +157,8 @@ public class PlayerActivity extends AppCompatActivity {
                 }
             }
         }).start();
+
+
     }
 
     private boolean requestAudioFocusForMyApp(final Context context) {
@@ -199,10 +218,10 @@ public class PlayerActivity extends AppCompatActivity {
 
     public void startService() {
         mIntent = new Intent(PlayerActivity.this, MusicService.class);
-        ContextCompat.startForegroundService(PlayerActivity.this,mIntent);
+        ContextCompat.startForegroundService(PlayerActivity.this, mIntent);
     }
 
-    public void stopService(){
+    public void stopService() {
         mIntent = new Intent(PlayerActivity.this, MusicService.class);
         stopService(mIntent);
     }
