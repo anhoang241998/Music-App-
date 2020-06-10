@@ -2,7 +2,7 @@
     <string name="app_name">Music App</string>
     <string name="menu_text">Settings</string>
     <string name="night_mode">Night Mode</string>
-    <string name="tv_music">Music</string>
+    <string name="tv_music">Now Playing</string>
     <string name="tv_title">When night falls (While you were sleeping)</string>
     <string name="tv_author">Eddy Kim</string>
     <string name="tv_start_time">00:00</string>

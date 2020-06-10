@@ -12,7 +12,6 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
-
         <activity
             android:name=".SplashActivity"
             android:theme="@style/AppTheme.Launcher">
@@ -32,6 +31,7 @@
             android:parentActivityName=".PlayerActivity">
         </activity>
 
+        <receiver android:name=".service.NotificationActionService"/>
         <service
             android:name=".service.MusicService"
             android:enabled="true"

@@ -2,11 +2,14 @@ package com.example.musicapp;
 
 import android.animation.ObjectAnimator;
 import android.annotation.SuppressLint;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -25,12 +28,13 @@ import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.content.ContextCompat;
 
 import com.example.musicapp.service.MusicService;
+import com.example.musicapp.service.Playable;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
 import de.hdodenhof.circleimageview.CircleImageView;
 
-public class PlayerActivity extends AppCompatActivity {
+public class PlayerActivity extends AppCompatActivity implements Playable {
 
     @BindView(R.id.tv_start_time)
     TextView mStartTime;
@@ -51,6 +55,21 @@ public class PlayerActivity extends AppCompatActivity {
     private AudioManager mAudioManager;
     private boolean gotFocus;
     private Intent mIntent;
+
+
+    BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getExtras().getString("actionName");
+            if (MusicService.ACTION_PLAY.equals(action)) {
+                if (mSong.isPlaying()) {
+                    onPauseMusic();
+                } else {
+                    onPlayMusic();
+                }
+            }
+        }
+    };
 
     private AudioManager.OnAudioFocusChangeListener mOnAudioFocusChangeListener = new AudioManager.OnAudioFocusChangeListener() {
         @Override
@@ -95,6 +114,10 @@ public class PlayerActivity extends AppCompatActivity {
         final ObjectAnimator mAnimator = ObjectAnimator.ofFloat(mMusicImage, View.ROTATION, 0f, 360f);
         mAnimator.setDuration(30000).setRepeatCount(Animation.INFINITE);
         mAnimator.setInterpolator(new LinearInterpolator());
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            registerReceiver(mBroadcastReceiver, new IntentFilter("TRACKS_TRACKS"));
+        }
 
         if (isNightModeOn) {
             AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES);
@@ -169,10 +192,10 @@ public class PlayerActivity extends AppCompatActivity {
         return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
     }
 
-//    void releaseAudioFocusForMyApp(final Context context) {
-//        mAudioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
-//        mAudioManager.abandonAudioFocus(mOnAudioFocusChangeListener);
-//    }
+   /* void releaseAudioFocusForMyApp(final Context context) {
+        mAudioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+        mAudioManager.abandonAudioFocus(mOnAudioFocusChangeListener);
+    }*/
 
 
     @SuppressLint("HandlerLeak")
@@ -224,5 +247,17 @@ public class PlayerActivity extends AppCompatActivity {
     public void stopService() {
         mIntent = new Intent(PlayerActivity.this, MusicService.class);
         stopService(mIntent);
+    }
+
+    @Override
+    public void onPlayMusic() {
+        mSong.start();
+        mBtnPlay.setBackgroundResource(R.drawable.ic_pause);
+    }
+
+    @Override
+    public void onPauseMusic() {
+        mSong.pause();
+        mBtnPlay.setBackgroundResource(R.drawable.ic_play);
     }
 }
