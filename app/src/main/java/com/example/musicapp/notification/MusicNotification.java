@@ -14,6 +14,7 @@ public class MusicNotification extends Application {
         createNotificationChannel();
     }
 
+    //Hàm khởi tạo NotificationChannel và khai trong Manifest để chạy luôn
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O){
             NotificationChannel serviceChannel = new NotificationChannel(CHANNEL_ID, "Music Service Channel", NotificationManager.IMPORTANCE_LOW);

@@ -2,14 +2,8 @@ package com.example.musicapp;
 
 import android.animation.ObjectAnimator;
 import android.annotation.SuppressLint;
-import android.content.BroadcastReceiver;
-import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.SharedPreferences;
-import android.media.AudioManager;
-import android.media.MediaPlayer;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -27,14 +21,14 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.content.ContextCompat;
 
+import com.example.musicapp.model.Music;
 import com.example.musicapp.service.MusicService;
-import com.example.musicapp.service.Playable;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
 import de.hdodenhof.circleimageview.CircleImageView;
 
-public class PlayerActivity extends AppCompatActivity implements Playable {
+public class PlayerActivity extends AppCompatActivity {
 
     @BindView(R.id.tv_start_time)
     TextView mStartTime;
@@ -47,54 +41,12 @@ public class PlayerActivity extends AppCompatActivity implements Playable {
     @BindView(R.id.img)
     CircleImageView mMusicImage;
 
-    private MediaPlayer mSong;
     private int mSongTotalTime, mRotating = 1;
-
     private SharedPreferences mAppSettingPrefs;
     private Boolean isNightModeOn;
-    private AudioManager mAudioManager;
     private boolean gotFocus;
     private Intent mIntent;
-
-
-    BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            String action = intent.getExtras().getString("actionName");
-            if (MusicService.ACTION_PLAY.equals(action)) {
-                if (mSong.isPlaying()) {
-                    onPauseMusic();
-                } else {
-                    onPlayMusic();
-                }
-            }
-        }
-    };
-
-    private AudioManager.OnAudioFocusChangeListener mOnAudioFocusChangeListener = new AudioManager.OnAudioFocusChangeListener() {
-        @Override
-        public void onAudioFocusChange(int focusChange) {
-            switch (focusChange) {
-                case (AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK):
-                    mSong.setVolume(0.2f, 0.2f);
-                    break;
-                case (AudioManager.AUDIOFOCUS_LOSS_TRANSIENT):
-                    mSong.stop();
-                    break;
-                case (AudioManager.AUDIOFOCUS_LOSS):
-                    mSong.pause();
-                    mBtnPlay.setBackgroundResource(R.drawable.ic_play);
-                    break;
-                case (AudioManager.AUDIOFOCUS_GAIN):
-                    mSong.start();
-                    mSong.setVolume(1f, 1f);
-                    break;
-                default:
-                    break;
-            }
-        }
-    };
-
+    private Music mMusic;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -105,20 +57,16 @@ public class PlayerActivity extends AppCompatActivity implements Playable {
         setContentView(R.layout.activity_player);
         ButterKnife.bind(this);
 
-        mAudioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        mSong = MediaPlayer.create(this, R.raw.when_night_falls);
-        mSong.setLooping(true);
-        mSong.seekTo(0);
-        mSongTotalTime = mSong.getDuration();
+        mMusic = Music.getInstance();
+        mMusic.initializeMusic(this);
+        mSongTotalTime = mMusic.getSongTotalTime();
 
+        //Khởi tạo animation cho imageView
         final ObjectAnimator mAnimator = ObjectAnimator.ofFloat(mMusicImage, View.ROTATION, 0f, 360f);
         mAnimator.setDuration(30000).setRepeatCount(Animation.INFINITE);
         mAnimator.setInterpolator(new LinearInterpolator());
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            registerReceiver(mBroadcastReceiver, new IntentFilter("TRACKS_TRACKS"));
-        }
-
+        //hàm check cho darkmode
         if (isNightModeOn) {
             AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES);
         } else {
@@ -126,11 +74,11 @@ public class PlayerActivity extends AppCompatActivity implements Playable {
         }
 
         mBtnPlay.setOnClickListener(v -> {
-            if (!mSong.isPlaying()) {
-                gotFocus = requestAudioFocusForMyApp(PlayerActivity.this);
+            if (!mMusic.isSongPlaying()) {
+                gotFocus = mMusic.requestAudioFocusForMyApp(PlayerActivity.this);
                 if (gotFocus) {
                     startService();
-                    mSong.start();
+                    mMusic.playMusic();
                     mBtnPlay.setBackgroundResource(R.drawable.ic_pause);
                     if (mRotating == 1) {
                         mRotating = 2;
@@ -140,26 +88,31 @@ public class PlayerActivity extends AppCompatActivity implements Playable {
                     }
                 }
             } else {
-                mSong.pause();
+                mMusic.pauseMusic();
                 mBtnPlay.setBackgroundResource(R.drawable.ic_play);
                 mAnimator.pause();
 //                releaseAudioFocusForMyApp(PlayerActivity.this);
             }
         });
 
+        //Hàm set độ dài cho seekbar
         mTimelineSeekBar.setMax(mSongTotalTime);
+
+        /*
+        * Hàm cho việc kéo seekbar thì nhạc chạy theo bằng cách tạo ra 1 thread để ngủ đi 1s, trong thời điểm đó sẽ lấy
+        * thời gian gán lại cho textView
+        */
         mTimelineSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (fromUser) {
-                    mSong.seekTo(progress);
+                    mMusic.seekSongToTime(progress);
                     mTimelineSeekBar.setProgress(progress);
                 }
             }
 
             @Override
             public void onStartTrackingTouch(SeekBar seekBar) {
-
             }
 
             @Override
@@ -169,10 +122,10 @@ public class PlayerActivity extends AppCompatActivity implements Playable {
         });
 
         new Thread(() -> {
-            while (mSong != null) {
+            while (mMusic != null) {
                 try {
                     Message message = new Message();
-                    message.what = mSong.getCurrentPosition();
+                    message.what = mMusic.getSongCurrentTime();
                     handler.sendMessage(message);
                     Thread.sleep(1000);
                 } catch (InterruptedException ignored) {
@@ -180,23 +133,7 @@ public class PlayerActivity extends AppCompatActivity implements Playable {
                 }
             }
         }).start();
-
-
     }
-
-    private boolean requestAudioFocusForMyApp(final Context context) {
-        mAudioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
-        int result = mAudioManager.requestAudioFocus(mOnAudioFocusChangeListener,
-                AudioManager.STREAM_MUSIC,
-                AudioManager.AUDIOFOCUS_GAIN);
-        return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
-    }
-
-   /* void releaseAudioFocusForMyApp(final Context context) {
-        mAudioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
-        mAudioManager.abandonAudioFocus(mOnAudioFocusChangeListener);
-    }*/
-
 
     @SuppressLint("HandlerLeak")
     private Handler handler = new Handler() {
@@ -213,6 +150,7 @@ public class PlayerActivity extends AppCompatActivity implements Playable {
         }
     };
 
+    //Hàm tạo ra thời gian cho chữ
     public String createTimeText(int time) {
         String timeText;
         int min = time / 1000 / 60;
@@ -223,41 +161,27 @@ public class PlayerActivity extends AppCompatActivity implements Playable {
         return timeText;
     }
 
+    //Hàm handle lại option menu
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.toolbar_menu, menu);
         return true;
     }
 
+    //hàm cho việc nhấn vào các item bên trong menu
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
         if (item.getItemId() == R.id.menu_item_setting) {
             Intent intent = new Intent(PlayerActivity.this, SettingsActivity.class);
-            intent.putExtra("duration", mSong.getCurrentPosition());
             startActivity(intent);
         }
         return super.onOptionsItemSelected(item);
     }
 
+    //Hàm chạy Music Service
     public void startService() {
         mIntent = new Intent(PlayerActivity.this, MusicService.class);
         ContextCompat.startForegroundService(PlayerActivity.this, mIntent);
     }
 
-    public void stopService() {
-        mIntent = new Intent(PlayerActivity.this, MusicService.class);
-        stopService(mIntent);
-    }
-
-    @Override
-    public void onPlayMusic() {
-        mSong.start();
-        mBtnPlay.setBackgroundResource(R.drawable.ic_pause);
-    }
-
-    @Override
-    public void onPauseMusic() {
-        mSong.pause();
-        mBtnPlay.setBackgroundResource(R.drawable.ic_play);
-    }
 }
