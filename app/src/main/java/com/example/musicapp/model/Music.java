@@ -16,7 +16,7 @@ public class Music {
     private static final Music instance = new Music();
     private MediaPlayer mSong;
     private int mSongTotalTime;
-    private AudioManager mAudioManager;
+
 
     private Music() {
 
@@ -28,7 +28,6 @@ public class Music {
 
     //Hàm khởi tạo bài hát
     public void initializeMusic(Context context){
-        mAudioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
         mSong = MediaPlayer.create(context, R.raw.when_night_falls);
         mSong.setLooping(true);
         mSong.seekTo(0);
@@ -37,6 +36,11 @@ public class Music {
     //Hàm chơi nhạc
     public void playMusic(){
         mSong.start();
+    }
+
+    //Hàm dừng nhạc
+    public void stopMusic(){
+        mSong.stop();
     }
 
     //Hàm tạm thời dừng nhạc
@@ -65,42 +69,11 @@ public class Music {
         mSong.seekTo(progress);
     }
 
-    // Hàm check Focus Audio, tắt các bài hát khác khi mình đang play nhạc
-    private AudioManager.OnAudioFocusChangeListener mOnAudioFocusChangeListener = new AudioManager.OnAudioFocusChangeListener() {
-        @Override
-        public void onAudioFocusChange(int focusChange) {
-            switch (focusChange) {
-                case (AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK):
-                    mSong.setVolume(0.2f, 0.2f);
-                    break;
-                case (AudioManager.AUDIOFOCUS_LOSS_TRANSIENT):
-                    mSong.stop();
-                    break;
-                case (AudioManager.AUDIOFOCUS_LOSS):
-                    mSong.pause();
-                    break;
-                case (AudioManager.AUDIOFOCUS_GAIN):
-                    mSong.start();
-                    mSong.setVolume(1f, 1f);
-                    break;
-                default:
-                    break;
-            }
-        }
-    };
-
-    //Hàm xin quyền Focus Audio cho app của mình
-    public boolean requestAudioFocusForMyApp(final Context context) {
-        mAudioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
-        int result = mAudioManager.requestAudioFocus(mOnAudioFocusChangeListener,
-                AudioManager.STREAM_MUSIC,
-                AudioManager.AUDIOFOCUS_GAIN);
-        return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+    public void setSongVolumeLow(){
+        mSong.setVolume(0.2f, 0.2f);
+    }
+    public void setSongVolumeNormal(){
+        mSong.setVolume(1f, 1f);
     }
 
-    //Hàm xin huỷ quyền Focus Audio cho app của mình
-    /* void releaseAudioFocusForMyApp(final Context context) {
-        mAudioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
-        mAudioManager.abandonAudioFocus(mOnAudioFocusChangeListener);
-    }*/
 }

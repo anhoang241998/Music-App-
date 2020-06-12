@@ -2,11 +2,18 @@ package com.example.musicapp;
 
 import android.animation.ObjectAnimator;
 import android.annotation.SuppressLint;
+import android.app.ActivityManager;
+import android.app.NotificationManager;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.media.AudioManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
+import android.service.notification.StatusBarNotification;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -22,6 +29,7 @@ import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.content.ContextCompat;
 
 import com.example.musicapp.model.Music;
+import com.example.musicapp.notification.MusicNotification;
 import com.example.musicapp.service.MusicService;
 
 import butterknife.BindView;
@@ -47,6 +55,27 @@ public class PlayerActivity extends AppCompatActivity {
     private boolean gotFocus;
     private Intent mIntent;
     private Music mMusic;
+    private AudioManager mAudioManager;
+    ObjectAnimator mAnimator;
+
+    //Gọi lại Broadcast receiver để nhận lại các hành động
+    BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getExtras().getString("actionName");
+            switch (action) {
+                case MusicService.ACTION_PLAY:
+                    if (mMusic.isSongPlaying()) {
+                        mAnimator.pause();
+                        mBtnPlay.setBackgroundResource(R.drawable.ic_play);
+                    } else {
+                        mAnimator.resume();
+                        mBtnPlay.setBackgroundResource(R.drawable.ic_pause);
+                    }
+                    break;
+            }
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -60,9 +89,11 @@ public class PlayerActivity extends AppCompatActivity {
         mMusic = Music.getInstance();
         mMusic.initializeMusic(this);
         mSongTotalTime = mMusic.getSongTotalTime();
+        mAudioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        registerReceiver(mBroadcastReceiver, new IntentFilter("TRACKS_TRACKS"));
 
         //Khởi tạo animation cho imageView
-        final ObjectAnimator mAnimator = ObjectAnimator.ofFloat(mMusicImage, View.ROTATION, 0f, 360f);
+        mAnimator = ObjectAnimator.ofFloat(mMusicImage, View.ROTATION, 0f, 360f);
         mAnimator.setDuration(30000).setRepeatCount(Animation.INFINITE);
         mAnimator.setInterpolator(new LinearInterpolator());
 
@@ -75,16 +106,41 @@ public class PlayerActivity extends AppCompatActivity {
 
         mBtnPlay.setOnClickListener(v -> {
             if (!mMusic.isSongPlaying()) {
-                gotFocus = mMusic.requestAudioFocusForMyApp(PlayerActivity.this);
+                gotFocus = requestAudioFocusForMyApp(PlayerActivity.this);
                 if (gotFocus) {
-                    startService();
-                    mMusic.playMusic();
-                    mBtnPlay.setBackgroundResource(R.drawable.ic_pause);
-                    if (mRotating == 1) {
-                        mRotating = 2;
-                        mAnimator.start();
-                    } else {
-                        mAnimator.resume();
+                    if (!isServiceRunning(MusicService.class)) {
+                        startService();
+                        checkNotification();
+                        mMusic.playMusic();
+                        mBtnPlay.setBackgroundResource(R.drawable.ic_pause);
+                        if (mRotating == 1) {
+                            mRotating = 2;
+                            mAnimator.start();
+                        } else {
+                            mAnimator.resume();
+                        }
+                    } else if (isServiceRunning(MusicService.class)) {
+                        //Nếu notification đã được tạo thì khi ấn play không cần tạo lại notification nữa.
+                        if (checkNotification()) {
+                            mMusic.playMusic();
+                            mBtnPlay.setBackgroundResource(R.drawable.ic_pause);
+                            if (mRotating == 1) {
+                                mRotating = 2;
+                                mAnimator.start();
+                            } else {
+                                mAnimator.resume();
+                            }
+                        } else if (!checkNotification()) {  //Nếu notification đã bị xoá thì khi ấn play cần tạo lại notification.
+                            startService();
+                            mMusic.playMusic();
+                            mBtnPlay.setBackgroundResource(R.drawable.ic_pause);
+                            if (mRotating == 1) {
+                                mRotating = 2;
+                                mAnimator.start();
+                            } else {
+                                mAnimator.resume();
+                            }
+                        }
                     }
                 }
             } else {
@@ -182,6 +238,75 @@ public class PlayerActivity extends AppCompatActivity {
     public void startService() {
         mIntent = new Intent(PlayerActivity.this, MusicService.class);
         ContextCompat.startForegroundService(PlayerActivity.this, mIntent);
+    }
+
+    // Hàm check Focus Audio, tắt các bài hát khác khi mình đang play nhạc
+    private AudioManager.OnAudioFocusChangeListener mOnAudioFocusChangeListener = new AudioManager.OnAudioFocusChangeListener() {
+        @Override
+        public void onAudioFocusChange(int focusChange) {
+            switch (focusChange) {
+                case (AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK):
+                    mMusic.setSongVolumeLow();
+                    break;
+                case (AudioManager.AUDIOFOCUS_LOSS_TRANSIENT):
+                    mMusic.stopMusic();
+                    break;
+                case (AudioManager.AUDIOFOCUS_LOSS):
+                    mMusic.pauseMusic();
+                    mBtnPlay.setBackgroundResource(R.drawable.ic_play);
+                    mAnimator.pause();
+                    break;
+                case (AudioManager.AUDIOFOCUS_GAIN):
+                    mMusic.playMusic();
+                    mMusic.setSongVolumeNormal();
+                    mBtnPlay.setBackgroundResource(R.drawable.ic_pause);
+                    mAnimator.start();
+                    break;
+                default:
+                    break;
+            }
+        }
+    };
+
+    //Hàm xin quyền Focus Audio cho app của mình
+    public boolean requestAudioFocusForMyApp(final Context context) {
+        mAudioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+        int result = mAudioManager.requestAudioFocus(mOnAudioFocusChangeListener,
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN);
+        return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+    }
+
+    //Hàm xin huỷ quyền Focus Audio cho app của mình
+    /* void releaseAudioFocusForMyApp(final Context context) {
+        mAudioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+        mAudioManager.abandonAudioFocus(mOnAudioFocusChangeListener);
+    }*/
+
+    //Hàm check xem service đã được tạo hay chưa
+    private boolean isServiceRunning(Class<?> serviceClass) {
+        ActivityManager manager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+        for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
+            if (serviceClass.getName().equals(service.service.getClassName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    //hàm check notification đã được tạo hay chưa
+    private boolean checkNotification() {
+        NotificationManager notificationManager = (NotificationManager) getApplication().getSystemService(Context.NOTIFICATION_SERVICE);
+        StatusBarNotification[] notifications = new StatusBarNotification[0];
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            notifications = notificationManager.getActiveNotifications();
+        }
+        for (StatusBarNotification notification : notifications) {
+            if (notification.getId() == MusicNotification.PLAYER_SERVICE_NOTIFICATION_ID) {
+                return true;
+            }
+        }
+        return false;
     }
 
 }

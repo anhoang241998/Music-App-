@@ -7,6 +7,7 @@ import android.os.Build;
 
 public class MusicNotification extends Application {
     public static final String CHANNEL_ID = "musicServiceChannel";
+    public static final int PLAYER_SERVICE_NOTIFICATION_ID = 1;
 
     @Override
     public void onCreate() {
