@@ -19,6 +19,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.service.notification.StatusBarNotification;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -45,7 +46,9 @@ import butterknife.BindView;
 import butterknife.ButterKnife;
 import de.hdodenhof.circleimageview.CircleImageView;
 
+import static com.example.musicapp.service.MusicService.ACTION_NEXT;
 import static com.example.musicapp.service.MusicService.ACTION_PLAY;
+import static com.example.musicapp.service.MusicService.ACTION_PREVIOUS;
 
 public class PlayerActivity extends AppCompatActivity {
 
@@ -79,6 +82,12 @@ public class PlayerActivity extends AppCompatActivity {
     private SharedPreferences mAppSettingPrefs;
     private Boolean isNightModeOn;
     private boolean gotFocus;
+
+    public static boolean getIsActivityActive() {
+        return isActivityActive;
+    }
+
+    private static boolean isActivityActive;
     private Intent mIntent;
     private Intent mPlayableIntent;
     private Music mMusic;
@@ -88,6 +97,7 @@ public class PlayerActivity extends AppCompatActivity {
     private Bitmap mBitmap;
     private Animation mSlideAnim;
     ObjectAnimator mAnimator;
+
 
     //Gọi lại Broadcast receiver để nhận lại các hành động
     BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
@@ -103,6 +113,18 @@ public class PlayerActivity extends AppCompatActivity {
                     } else {
                         mAnimator.resume();
                         mBtnPlay.setBackgroundResource(R.drawable.ic_pause);
+                    }
+                    break;
+                case ACTION_NEXT:
+                    if (isActivityActive = false) {
+                        mMusic.nextSong(PlayerActivity.this, mTitle, mAuthor, mMusicImage, mBtnPlay, mAnimator);
+                        createAnimationAndColorForNextButton();
+                    }
+                    break;
+                case ACTION_PREVIOUS:
+                    if (isActivityActive = false) {
+                        mMusic.previousSong(PlayerActivity.this, mTitle, mAuthor, mMusicImage, mBtnPlay, mAnimator);
+                        createAnimationAndColorForPreviousButton();
                     }
                     break;
             }
@@ -206,42 +228,22 @@ public class PlayerActivity extends AppCompatActivity {
         mBtnNext.setOnClickListener(v -> {
             mRotating = 1;
             mMusic.nextSong(PlayerActivity.this, mTitle, mAuthor, mMusicImage, mBtnPlay, mAnimator);
-            //tạo ra animation cho hình
-            mSlideAnim = AnimationUtils.loadAnimation(PlayerActivity.this, android.R.anim.slide_in_left);
-            mMusicImage.startAnimation(mSlideAnim);
-            //Dùng Palette Api để tách màu trong hình ra và tạo Gradient Background để gán vô
-            mBitmap = ((BitmapDrawable) mMusicImage.getDrawable()).getBitmap();
-            Palette.from(mBitmap).generate(palette -> {
-                if (palette != null) {
-                    mDarkMutedSwatch = palette.getDarkMutedSwatch();
-                    if (mDarkMutedSwatch != null) {
-                        mGradientDrawable = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{mDarkMutedSwatch.getRgb(), 0xE6353535});
-                        mLayoutBackground.setBackground(mGradientDrawable);
-                    }
-                } else mLayoutBackground.setBackgroundColor(Color.WHITE);
-            });
-            mSongTotalTime = mMusic.getSongTotalTime(PlayerActivity.this);
+            if (checkNotification()) {
+                mPlayableIntent.setAction(ACTION_NEXT);
+                sendBroadcast(mPlayableIntent);
+            }
+            createAnimationAndColorForNextButton();
         });
 
 //        Nút previous
         mBtnPrevious.setOnClickListener(v -> {
             mRotating = 1;
             mMusic.previousSong(PlayerActivity.this, mTitle, mAuthor, mMusicImage, mBtnPlay, mAnimator);
-            //tạo ra animation cho hình
-            mSlideAnim = AnimationUtils.loadAnimation(PlayerActivity.this, R.anim.slide_in_right);
-            mMusicImage.startAnimation(mSlideAnim);
-            //Dùng Palette Api để tách màu trong hình ra và tạo Gradient Background để gán vô
-            mBitmap = ((BitmapDrawable) mMusicImage.getDrawable()).getBitmap();
-            Palette.from(mBitmap).generate(palette -> {
-                if (palette != null) {
-                    mDarkMutedSwatch = palette.getDarkMutedSwatch();
-                    if (mDarkMutedSwatch != null) {
-                        mGradientDrawable = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{mDarkMutedSwatch.getRgb(), 0xE6353535});
-                        mLayoutBackground.setBackground(mGradientDrawable);
-                    }
-                } else mLayoutBackground.setBackgroundColor(Color.WHITE);
-            });
-            mSongTotalTime = mMusic.getSongTotalTime(PlayerActivity.this);
+            if (checkNotification()) {
+                mPlayableIntent.setAction(ACTION_PREVIOUS);
+                sendBroadcast(mPlayableIntent);
+            }
+            createAnimationAndColorForPreviousButton();
         });
 
         //Hàm set độ dài cho seekbar
@@ -408,5 +410,53 @@ public class PlayerActivity extends AppCompatActivity {
             }
         }
         return false;
+    }
+
+    private void createAnimationAndColorForNextButton(){
+        //tạo ra animation cho hình
+        mSlideAnim = AnimationUtils.loadAnimation(PlayerActivity.this, android.R.anim.slide_in_left);
+        mMusicImage.startAnimation(mSlideAnim);
+        //Dùng Palette Api để tách màu trong hình ra và tạo Gradient Background để gán vô
+        mBitmap = ((BitmapDrawable) mMusicImage.getDrawable()).getBitmap();
+        Palette.from(mBitmap).generate(palette -> {
+            if (palette != null) {
+                mDarkMutedSwatch = palette.getDarkMutedSwatch();
+                if (mDarkMutedSwatch != null) {
+                    mGradientDrawable = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{mDarkMutedSwatch.getRgb(), 0xE6353535});
+                    mLayoutBackground.setBackground(mGradientDrawable);
+                }
+            } else mLayoutBackground.setBackgroundColor(Color.WHITE);
+        });
+        mSongTotalTime = mMusic.getSongTotalTime(PlayerActivity.this);
+    }
+
+    private void createAnimationAndColorForPreviousButton(){
+        //tạo ra animation cho hình
+        mSlideAnim = AnimationUtils.loadAnimation(PlayerActivity.this, R.anim.slide_in_right);
+        mMusicImage.startAnimation(mSlideAnim);
+        //Dùng Palette Api để tách màu trong hình ra và tạo Gradient Background để gán vô
+        mBitmap = ((BitmapDrawable) mMusicImage.getDrawable()).getBitmap();
+        Palette.from(mBitmap).generate(palette -> {
+            if (palette != null) {
+                mDarkMutedSwatch = palette.getDarkMutedSwatch();
+                if (mDarkMutedSwatch != null) {
+                    mGradientDrawable = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{mDarkMutedSwatch.getRgb(), 0xE6353535});
+                    mLayoutBackground.setBackground(mGradientDrawable);
+                }
+            } else mLayoutBackground.setBackgroundColor(Color.WHITE);
+        });
+        mSongTotalTime = mMusic.getSongTotalTime(PlayerActivity.this);
+    }
+
+    @Override
+    protected void onStart() {
+        isActivityActive = false;
+        super.onStart();
+    }
+
+    @Override
+    protected void onDestroy() {
+        isActivityActive = true;
+        super.onDestroy();
     }
 }

@@ -30,18 +30,21 @@ public class MusicService extends Service implements Playable {
     public static final String ACTION_PLAY = "actionPlay";
     public static final String ACTION_CLOSE = "actionClose";
     public static final String ACTION_DISMISS = "actionDismiss";
+    public static final String ACTION_NEXT = "actionNext";
+    public static final String ACTION_PREVIOUS = "actionPrevious";
     private static MediaSessionCompat mMediaSessionCompat;
+    private String mSongTitle;
+    private String mSongAuthor;
+    private int mSongImage;
+    private boolean isActivityAlive = PlayerActivity.getIsActivityActive();
 
     /*
-    * biến đếm để giải quyết vấn đề đầu khi chạy app, do là app khi chạy lần đầu notification chưa set được sang hình pause
-    * nhờ việc check service đã được chạy chưa và nếu service đã dc chạy và ở lần đầu thì sẽ tạo ra notification với hình
-    * pause tương ứng việc đang phát nhạc
-    */
+     * biến đếm để giải quyết vấn đề đầu khi chạy app, do là app khi chạy lần đầu notification chưa set được sang hình pause
+     * nhờ việc check service đã được chạy chưa và nếu service đã dc chạy và ở lần đầu thì sẽ tạo ra notification với hình
+     * pause tương ứng việc đang phát nhạc
+     */
     private int serviceCount = 0;
-
-
     Music mMusic;
-
 
     @Override
     public void onCreate() {
@@ -86,6 +89,19 @@ public class MusicService extends Service implements Playable {
                 case PlayerActivity.ACTION_AUDIO_LOSS:
                 case PlayerActivity.ACTION_AUDIO_GAIN:
                     serviceCount++;
+                    update();
+                    break;
+                case MusicService.ACTION_NEXT:
+                    serviceCount++;
+                    if (isActivityAlive = true) {
+                        mMusic.nextSongNotification(MusicService.this);
+                    }
+                    update();
+                    break;
+                case MusicService.ACTION_PREVIOUS:
+                    serviceCount++;
+                    if (isActivityAlive = true)
+                        mMusic.previousSongNotification(MusicService.this);
                     update();
                     break;
             }
@@ -134,6 +150,11 @@ public class MusicService extends Service implements Playable {
 
     private NotificationCompat.Builder getNotificationBuilder() {
 
+        mSongAuthor = mMusic.getSongAuthor();
+        mSongTitle = mMusic.getSongTitle();
+        mSongImage = mMusic.getSongImage();
+
+
         //PendingIntent tạo ra activity khi ấn vào notification (xoá stack)
         Intent openActivity = new Intent(this, PlayerActivity.class).setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         PendingIntent pendingIntentOpenActivity = PendingIntent.getActivity(getApplicationContext(), 0, openActivity, PendingIntent.FLAG_CANCEL_CURRENT);
@@ -142,7 +163,14 @@ public class MusicService extends Service implements Playable {
         Intent playIntent = new Intent(this, NotificationActionService.class).setAction(ACTION_PLAY);
         PendingIntent pendingIntentPlay = PendingIntent.getBroadcast(getApplicationContext(), 0, playIntent, PendingIntent.FLAG_UPDATE_CURRENT);
 
-        //PendingIntent cho nút close
+        //PendingIntent cho nút next
+        Intent nextIntent = new Intent(this, NotificationActionService.class).setAction(ACTION_NEXT);
+        PendingIntent pendingIntentNext = PendingIntent.getBroadcast(getApplicationContext(), 0, nextIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+
+        Intent previousIntent = new Intent(this, NotificationActionService.class).setAction(ACTION_PREVIOUS);
+        PendingIntent pendingIntentPrevious = PendingIntent.getBroadcast(getApplicationContext(), 0, previousIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+
+        //PendingIntent cho nút previous
         Intent closeNotificationIntent = new Intent(this, NotificationActionService.class).setAction(ACTION_CLOSE);
         PendingIntent closeNotificationPendingIntent = PendingIntent.getBroadcast(getApplicationContext(), 0, closeNotificationIntent, PendingIntent.FLAG_UPDATE_CURRENT);
 
@@ -151,7 +179,7 @@ public class MusicService extends Service implements Playable {
         PendingIntent swipeActionPendingIntent = PendingIntent.getBroadcast(this, 0, swipeActionIntent, 0);
 
         //tạo ra style cho notification
-        Bitmap icon = BitmapFactory.decodeResource(getApplicationContext().getResources(), R.mipmap.photo);
+        Bitmap icon = BitmapFactory.decodeResource(getApplicationContext().getResources(), mSongImage);
 
         androidx.media.app.NotificationCompat.MediaStyle style = new androidx.media.app.NotificationCompat.MediaStyle();
         style.setMediaSession(mMediaSessionCompat.getSessionToken());
@@ -160,8 +188,8 @@ public class MusicService extends Service implements Playable {
         style.setCancelButtonIntent(swipeActionPendingIntent);
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("When Night Falls")
-                .setContentText("Eddy Kim")
+                .setContentTitle(mSongTitle)
+                .setContentText(mSongAuthor)
                 .setSmallIcon(R.drawable.ic_music)
                 .setContentIntent(pendingIntentPlay)
                 .setContentIntent(pendingIntentOpenActivity)
@@ -173,20 +201,20 @@ public class MusicService extends Service implements Playable {
 
         //Giải thuật cho việc notification lần đầu
         if (isServiceRunning(MusicService.class) && serviceCount == 1) {
-            builder.addAction(R.drawable.ic_previous, "Previous", null)
+            builder.addAction(R.drawable.ic_previous, "Previous", pendingIntentPrevious)
                     .addAction(R.drawable.ic_pause, "Stop", pendingIntentPlay)
-                    .addAction(R.drawable.ic_next, "Next", null)
+                    .addAction(R.drawable.ic_next, "Next", pendingIntentNext)
                     .addAction(R.drawable.ic_close, "Close", closeNotificationPendingIntent);
         } else if (isServiceRunning(MusicService.class )&& serviceCount>1) {
             if (mMusic.isSongPlaying()) {
-                builder.addAction(R.drawable.ic_previous, "Previous", null)
+                builder.addAction(R.drawable.ic_previous, "Previous", pendingIntentPrevious)
                         .addAction(R.drawable.ic_pause, "Stop", pendingIntentPlay)
-                        .addAction(R.drawable.ic_next, "Next", null)
+                        .addAction(R.drawable.ic_next, "Next", pendingIntentNext)
                         .addAction(R.drawable.ic_close, "Close", closeNotificationPendingIntent);
             } else if (!mMusic.isSongPlaying()) {
-                builder.addAction(R.drawable.ic_previous, "Previous", null)
+                builder.addAction(R.drawable.ic_previous, "Previous", pendingIntentPrevious)
                         .addAction(R.drawable.ic_play, "Play", pendingIntentPlay)
-                        .addAction(R.drawable.ic_next, "Next", null)
+                        .addAction(R.drawable.ic_next, "Next", pendingIntentNext)
                         .addAction(R.drawable.ic_close, "Close", closeNotificationPendingIntent);
             }
         }

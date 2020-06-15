@@ -78,6 +78,18 @@ public class Music {
         animator.end();
     }
 
+    //Hàm next song cho notification
+    public void nextSongNotification(Context context) {
+        mSongPlayListsPosition++;
+        if (mSongPlayListsPosition > mSongPlayLists.size() - 1) {
+            mSongPlayListsPosition = 0;
+        }
+        if (mMediaPlayer.isPlaying()) {
+            mMediaPlayer.stop();
+        }
+        mMediaPlayer = MediaPlayer.create(context, mSongPlayLists.get(mSongPlayListsPosition).getSongFile());
+    }
+
     //Hàm trở về sang nhạc cũ
     public void previousSong(Context context, TextView title, TextView author, ImageView songImage, Button buttonPlay, ObjectAnimator animator) {
         mSongPlayListsPosition--;
@@ -93,6 +105,33 @@ public class Music {
         songImage.setImageResource(mSongPlayLists.get(mSongPlayListsPosition).getSongImage());
         buttonPlay.setBackgroundResource(R.drawable.ic_play);
         animator.end();
+    }
+
+    //Hàm privous song cho notification
+    public void previousSongNotification(Context context) {
+        mSongPlayListsPosition++;
+        if (mSongPlayListsPosition > mSongPlayLists.size() - 1) {
+            mSongPlayListsPosition = 0;
+        }
+        if (mMediaPlayer.isPlaying()) {
+            mMediaPlayer.stop();
+        }
+        mMediaPlayer = MediaPlayer.create(context, mSongPlayLists.get(mSongPlayListsPosition).getSongFile());
+    }
+
+    //Hàm lấy tên bài hát
+    public String getSongAuthor() {
+        return mSongPlayLists.get(mSongPlayListsPosition).getSongAuthor();
+    }
+
+    //hàm lấy tên bài hát
+    public String getSongTitle() {
+        return mSongPlayLists.get(mSongPlayListsPosition).getSongTitle();
+    }
+
+    //Hàm lấy hình ảnh bài hát
+    public int getSongImage() {
+        return mSongPlayLists.get(mSongPlayListsPosition).getSongImage();
     }
 
     //Hàm lấy giá trị thời gian tổng của bài hát, giá trị trả về là int
