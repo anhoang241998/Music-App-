@@ -93,14 +93,14 @@ public class MusicService extends Service implements Playable {
                     break;
                 case MusicService.ACTION_NEXT:
                     serviceCount++;
-                    if (isActivityAlive = true) {
+                    if (isActivityAlive = false) {
                         mMusic.nextSongNotification(MusicService.this);
                     }
                     update();
                     break;
                 case MusicService.ACTION_PREVIOUS:
                     serviceCount++;
-                    if (isActivityAlive = true)
+                    if (isActivityAlive = false)
                         mMusic.previousSongNotification(MusicService.this);
                     update();
                     break;

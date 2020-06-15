@@ -107,7 +107,7 @@ public class Music {
         animator.end();
     }
 
-    //Hàm privous song cho notification
+    //Hàm previous song cho notification
     public void previousSongNotification(Context context) {
         mSongPlayListsPosition++;
         if (mSongPlayListsPosition > mSongPlayLists.size() - 1) {

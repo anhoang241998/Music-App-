@@ -116,13 +116,13 @@ public class PlayerActivity extends AppCompatActivity {
                     }
                     break;
                 case ACTION_NEXT:
-                    if (isActivityActive = false) {
+                    if (isActivityActive = true) {
                         mMusic.nextSong(PlayerActivity.this, mTitle, mAuthor, mMusicImage, mBtnPlay, mAnimator);
                         createAnimationAndColorForNextButton();
                     }
                     break;
                 case ACTION_PREVIOUS:
-                    if (isActivityActive = false) {
+                    if (isActivityActive = true) {
                         mMusic.previousSong(PlayerActivity.this, mTitle, mAuthor, mMusicImage, mBtnPlay, mAnimator);
                         createAnimationAndColorForPreviousButton();
                     }
@@ -227,23 +227,25 @@ public class PlayerActivity extends AppCompatActivity {
         // nút next
         mBtnNext.setOnClickListener(v -> {
             mRotating = 1;
-            mMusic.nextSong(PlayerActivity.this, mTitle, mAuthor, mMusicImage, mBtnPlay, mAnimator);
             if (checkNotification()) {
                 mPlayableIntent.setAction(ACTION_NEXT);
                 sendBroadcast(mPlayableIntent);
+            } else {
+                mMusic.nextSong(PlayerActivity.this, mTitle, mAuthor, mMusicImage, mBtnPlay, mAnimator);
+                createAnimationAndColorForNextButton();
             }
-            createAnimationAndColorForNextButton();
         });
 
 //        Nút previous
         mBtnPrevious.setOnClickListener(v -> {
             mRotating = 1;
-            mMusic.previousSong(PlayerActivity.this, mTitle, mAuthor, mMusicImage, mBtnPlay, mAnimator);
             if (checkNotification()) {
                 mPlayableIntent.setAction(ACTION_PREVIOUS);
                 sendBroadcast(mPlayableIntent);
+            } else {
+                mMusic.previousSong(PlayerActivity.this, mTitle, mAuthor, mMusicImage, mBtnPlay, mAnimator);
+                createAnimationAndColorForPreviousButton();
             }
-            createAnimationAndColorForPreviousButton();
         });
 
         //Hàm set độ dài cho seekbar
