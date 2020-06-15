@@ -42,6 +42,7 @@ public class MusicService extends Service implements Playable {
 
     Music mMusic;
 
+
     @Override
     public void onCreate() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -64,7 +65,28 @@ public class MusicService extends Service implements Playable {
                     }
                     break;
                 case MusicService.ACTION_CLOSE:
+                    mMusic.stopMusic();
                     stopSelf();
+                    break;
+                case PlayerActivity.ACTION_BUTTON_PAUSE:
+                    serviceCount++;
+                    mMusic.pauseMusic();
+                    update();
+                    stopForeground(false);
+                    break;
+                case PlayerActivity.ACTION_BUTTON_PLAY:
+                    serviceCount++;
+                    mMusic.playMusic();
+                    update();
+                    break;
+                case MusicService.ACTION_DISMISS:
+                    stopSelf();
+                    mMusic.stopMusic();
+                    break;
+                case PlayerActivity.ACTION_AUDIO_LOSS:
+                case PlayerActivity.ACTION_AUDIO_GAIN:
+                    serviceCount++;
+                    update();
                     break;
             }
         }
@@ -96,24 +118,25 @@ public class MusicService extends Service implements Playable {
         serviceCount++;
         Notification notification = getNotificationBuilder().build();
         startForeground(PLAYER_SERVICE_NOTIFICATION_ID, notification);
-        update();
         mMusic.playMusic();
+        update();
+
     }
 
     //Interface dừng bài hát
     @Override
     public void onPauseMusic() {
         serviceCount++;
-        update();
         mMusic.pauseMusic();
+        update();
         stopForeground(false);
     }
 
     private NotificationCompat.Builder getNotificationBuilder() {
 
-        //PendingIntent tạo ra activity khi ấn vào notification
-        Intent openActivity = new Intent(this, PlayerActivity.class);
-        PendingIntent pendingIntentOpenActivity = PendingIntent.getActivity(getApplicationContext(), 0, openActivity, PendingIntent.FLAG_UPDATE_CURRENT);
+        //PendingIntent tạo ra activity khi ấn vào notification (xoá stack)
+        Intent openActivity = new Intent(this, PlayerActivity.class).setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        PendingIntent pendingIntentOpenActivity = PendingIntent.getActivity(getApplicationContext(), 0, openActivity, PendingIntent.FLAG_CANCEL_CURRENT);
 
         //PendingIntent cho nút play
         Intent playIntent = new Intent(this, NotificationActionService.class).setAction(ACTION_PLAY);
@@ -125,8 +148,7 @@ public class MusicService extends Service implements Playable {
 
         //Intent cho việc swipe để dimiss notification nhưng không xoá đi service
         Intent swipeActionIntent = new Intent(this, NotificationActionService.class).setAction(ACTION_DISMISS);
-        PendingIntent swipeActionPendingIntent = PendingIntent.getService(this, 12, swipeActionIntent, 0);
-
+        PendingIntent swipeActionPendingIntent = PendingIntent.getBroadcast(this, 0, swipeActionIntent, 0);
 
         //tạo ra style cho notification
         Bitmap icon = BitmapFactory.decodeResource(getApplicationContext().getResources(), R.mipmap.photo);
@@ -147,7 +169,6 @@ public class MusicService extends Service implements Playable {
                 .setLargeIcon(icon)
                 .setAutoCancel(true)
                 .setOngoing(false)
-                .setProgress(mMusic.getSongTotalTime(), mMusic.getSongCurrentTime(), true)
                 .setDeleteIntent(swipeActionPendingIntent);
 
         //Giải thuật cho việc notification lần đầu
@@ -159,12 +180,12 @@ public class MusicService extends Service implements Playable {
         } else if (isServiceRunning(MusicService.class )&& serviceCount>1) {
             if (mMusic.isSongPlaying()) {
                 builder.addAction(R.drawable.ic_previous, "Previous", null)
-                        .addAction(R.drawable.ic_play, "Play", pendingIntentPlay)
+                        .addAction(R.drawable.ic_pause, "Stop", pendingIntentPlay)
                         .addAction(R.drawable.ic_next, "Next", null)
                         .addAction(R.drawable.ic_close, "Close", closeNotificationPendingIntent);
             } else if (!mMusic.isSongPlaying()) {
                 builder.addAction(R.drawable.ic_previous, "Previous", null)
-                        .addAction(R.drawable.ic_pause, "Stop", pendingIntentPlay)
+                        .addAction(R.drawable.ic_play, "Play", pendingIntentPlay)
                         .addAction(R.drawable.ic_next, "Next", null)
                         .addAction(R.drawable.ic_close, "Close", closeNotificationPendingIntent);
             }
@@ -190,4 +211,6 @@ public class MusicService extends Service implements Playable {
         }
         return false;
     }
+
+
 }

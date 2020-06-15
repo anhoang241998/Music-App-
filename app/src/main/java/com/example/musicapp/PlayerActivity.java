@@ -9,7 +9,12 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.GradientDrawable;
 import android.media.AudioManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -18,8 +23,10 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.animation.Animation;
+import android.view.animation.AnimationUtils;
 import android.view.animation.LinearInterpolator;
 import android.widget.Button;
+import android.widget.RelativeLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
 
@@ -27,16 +34,25 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.content.ContextCompat;
+import androidx.palette.graphics.Palette;
 
 import com.example.musicapp.model.Music;
 import com.example.musicapp.notification.MusicNotification;
 import com.example.musicapp.service.MusicService;
+import com.example.musicapp.service.NotificationActionService;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
 import de.hdodenhof.circleimageview.CircleImageView;
 
+import static com.example.musicapp.service.MusicService.ACTION_PLAY;
+
 public class PlayerActivity extends AppCompatActivity {
+
+    public static final String ACTION_BUTTON_PAUSE = "actionButtonPause";
+    public static final String ACTION_BUTTON_PLAY = "actionButtonPlay";
+    public static final String ACTION_AUDIO_LOSS = "actionAudioLoss";
+    public static final String ACTION_AUDIO_GAIN = "actionAudioGain";
 
     @BindView(R.id.tv_start_time)
     TextView mStartTime;
@@ -48,14 +64,29 @@ public class PlayerActivity extends AppCompatActivity {
     Button mBtnPlay;
     @BindView(R.id.img)
     CircleImageView mMusicImage;
+    TextView mTitle;
+    @BindView(R.id.tv_author)
+    TextView mAuthor;
+    @BindView(R.id.btn_next)
+    Button mBtnNext;
+    @BindView(R.id.btn_previous)
+    Button mBtnPrevious;
+    @BindView(R.id.relativeLayoutBackground)
+    RelativeLayout mLayoutBackground;
+
 
     private int mSongTotalTime, mRotating = 1;
     private SharedPreferences mAppSettingPrefs;
     private Boolean isNightModeOn;
     private boolean gotFocus;
     private Intent mIntent;
+    private Intent mPlayableIntent;
     private Music mMusic;
     private AudioManager mAudioManager;
+    private Palette.Swatch mDarkMutedSwatch;
+    private GradientDrawable mGradientDrawable;
+    private Bitmap mBitmap;
+    private Animation mSlideAnim;
     ObjectAnimator mAnimator;
 
     //Gọi lại Broadcast receiver để nhận lại các hành động
@@ -64,7 +95,8 @@ public class PlayerActivity extends AppCompatActivity {
         public void onReceive(Context context, Intent intent) {
             String action = intent.getExtras().getString("actionName");
             switch (action) {
-                case MusicService.ACTION_PLAY:
+                case ACTION_PLAY:
+                    requestAudioFocusForMyApp(PlayerActivity.this);
                     if (mMusic.isSongPlaying()) {
                         mAnimator.pause();
                         mBtnPlay.setBackgroundResource(R.drawable.ic_play);
@@ -77,10 +109,11 @@ public class PlayerActivity extends AppCompatActivity {
         }
     };
 
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        overridePendingTransition(R.anim.fade_in, R.anim.fade_out);
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
         mAppSettingPrefs = getSharedPreferences("AppSettingPrefs", 0);
         isNightModeOn = mAppSettingPrefs.getBoolean("NightMode", false);
         setContentView(R.layout.activity_player);
@@ -88,8 +121,9 @@ public class PlayerActivity extends AppCompatActivity {
 
         mMusic = Music.getInstance();
         mMusic.initializeMusic(this);
-        mSongTotalTime = mMusic.getSongTotalTime();
+        mSongTotalTime = mMusic.getSongTotalTime(PlayerActivity.this);
         mAudioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        mPlayableIntent = new Intent(PlayerActivity.this, NotificationActionService.class);
         registerReceiver(mBroadcastReceiver, new IntentFilter("TRACKS_TRACKS"));
 
         //Khởi tạo animation cho imageView
@@ -104,14 +138,24 @@ public class PlayerActivity extends AppCompatActivity {
             AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
         }
 
+        mBitmap = ((BitmapDrawable) mMusicImage.getDrawable()).getBitmap();
+        Palette.from(mBitmap).generate(palette -> {
+            if (palette != null) {
+                mDarkMutedSwatch = palette.getDarkMutedSwatch();
+                if (mDarkMutedSwatch != null) {
+                    mGradientDrawable = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{mDarkMutedSwatch.getRgb(), 0xE6353535});
+                    mLayoutBackground.setBackground(mGradientDrawable);
+                }
+            } else mLayoutBackground.setBackgroundColor(Color.WHITE);
+        });
+
+        //Nút play
         mBtnPlay.setOnClickListener(v -> {
             if (!mMusic.isSongPlaying()) {
                 gotFocus = requestAudioFocusForMyApp(PlayerActivity.this);
                 if (gotFocus) {
                     if (!isServiceRunning(MusicService.class)) {
                         startService();
-                        checkNotification();
-                        mMusic.playMusic();
                         mBtnPlay.setBackgroundResource(R.drawable.ic_pause);
                         if (mRotating == 1) {
                             mRotating = 2;
@@ -119,10 +163,12 @@ public class PlayerActivity extends AppCompatActivity {
                         } else {
                             mAnimator.resume();
                         }
+                        mMusic.playMusicActivity(mTitle, mAuthor, mMusicImage);
                     } else if (isServiceRunning(MusicService.class)) {
                         //Nếu notification đã được tạo thì khi ấn play không cần tạo lại notification nữa.
                         if (checkNotification()) {
-                            mMusic.playMusic();
+                            mPlayableIntent.setAction(ACTION_BUTTON_PLAY);
+                            sendBroadcast(mPlayableIntent);
                             mBtnPlay.setBackgroundResource(R.drawable.ic_pause);
                             if (mRotating == 1) {
                                 mRotating = 2;
@@ -132,7 +178,7 @@ public class PlayerActivity extends AppCompatActivity {
                             }
                         } else if (!checkNotification()) {  //Nếu notification đã bị xoá thì khi ấn play cần tạo lại notification.
                             startService();
-                            mMusic.playMusic();
+                            mMusic.playMusicActivity(mTitle, mAuthor, mMusicImage);
                             mBtnPlay.setBackgroundResource(R.drawable.ic_pause);
                             if (mRotating == 1) {
                                 mRotating = 2;
@@ -144,20 +190,67 @@ public class PlayerActivity extends AppCompatActivity {
                     }
                 }
             } else {
-                mMusic.pauseMusic();
-                mBtnPlay.setBackgroundResource(R.drawable.ic_play);
-                mAnimator.pause();
+                mPlayableIntent.setAction(ACTION_BUTTON_PAUSE); // nút pause
+                sendBroadcast(mPlayableIntent);
+                if (checkNotification()) {
+                    mBtnPlay.setBackgroundResource(R.drawable.ic_play);
+                    mAnimator.pause();
 //                releaseAudioFocusForMyApp(PlayerActivity.this);
+                } else if (!checkNotification() && isServiceRunning(MusicService.class)) {
+                    stopService(mIntent);
+                }
             }
+        });
+
+        // nút next
+        mBtnNext.setOnClickListener(v -> {
+            mRotating = 1;
+            mMusic.nextSong(PlayerActivity.this, mTitle, mAuthor, mMusicImage, mBtnPlay, mAnimator);
+            //tạo ra animation cho hình
+            mSlideAnim = AnimationUtils.loadAnimation(PlayerActivity.this, android.R.anim.slide_in_left);
+            mMusicImage.startAnimation(mSlideAnim);
+            //Dùng Palette Api để tách màu trong hình ra và tạo Gradient Background để gán vô
+            mBitmap = ((BitmapDrawable) mMusicImage.getDrawable()).getBitmap();
+            Palette.from(mBitmap).generate(palette -> {
+                if (palette != null) {
+                    mDarkMutedSwatch = palette.getDarkMutedSwatch();
+                    if (mDarkMutedSwatch != null) {
+                        mGradientDrawable = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{mDarkMutedSwatch.getRgb(), 0xE6353535});
+                        mLayoutBackground.setBackground(mGradientDrawable);
+                    }
+                } else mLayoutBackground.setBackgroundColor(Color.WHITE);
+            });
+            mSongTotalTime = mMusic.getSongTotalTime(PlayerActivity.this);
+        });
+
+//        Nút previous
+        mBtnPrevious.setOnClickListener(v -> {
+            mRotating = 1;
+            mMusic.previousSong(PlayerActivity.this, mTitle, mAuthor, mMusicImage, mBtnPlay, mAnimator);
+            //tạo ra animation cho hình
+            mSlideAnim = AnimationUtils.loadAnimation(PlayerActivity.this, R.anim.slide_in_right);
+            mMusicImage.startAnimation(mSlideAnim);
+            //Dùng Palette Api để tách màu trong hình ra và tạo Gradient Background để gán vô
+            mBitmap = ((BitmapDrawable) mMusicImage.getDrawable()).getBitmap();
+            Palette.from(mBitmap).generate(palette -> {
+                if (palette != null) {
+                    mDarkMutedSwatch = palette.getDarkMutedSwatch();
+                    if (mDarkMutedSwatch != null) {
+                        mGradientDrawable = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{mDarkMutedSwatch.getRgb(), 0xE6353535});
+                        mLayoutBackground.setBackground(mGradientDrawable);
+                    }
+                } else mLayoutBackground.setBackgroundColor(Color.WHITE);
+            });
+            mSongTotalTime = mMusic.getSongTotalTime(PlayerActivity.this);
         });
 
         //Hàm set độ dài cho seekbar
         mTimelineSeekBar.setMax(mSongTotalTime);
 
         /*
-        * Hàm cho việc kéo seekbar thì nhạc chạy theo bằng cách tạo ra 1 thread để ngủ đi 1s, trong thời điểm đó sẽ lấy
-        * thời gian gán lại cho textView
-        */
+         * Hàm cho việc kéo seekbar thì nhạc chạy theo bằng cách tạo ra 1 thread để ngủ đi 1s, trong thời điểm đó sẽ lấy
+         * thời gian gán lại cho textView
+         */
         mTimelineSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
@@ -189,6 +282,10 @@ public class PlayerActivity extends AppCompatActivity {
                 }
             }
         }).start();
+
+        mTitle = findViewById(R.id.tv_music_title);
+        mTitle.setSelected(true);
+
     }
 
     @SuppressLint("HandlerLeak")
@@ -253,12 +350,16 @@ public class PlayerActivity extends AppCompatActivity {
                     break;
                 case (AudioManager.AUDIOFOCUS_LOSS):
                     mMusic.pauseMusic();
+                    mPlayableIntent.setAction(ACTION_AUDIO_LOSS);
+                    sendBroadcast(mPlayableIntent);
                     mBtnPlay.setBackgroundResource(R.drawable.ic_play);
                     mAnimator.pause();
                     break;
                 case (AudioManager.AUDIOFOCUS_GAIN):
                     mMusic.playMusic();
                     mMusic.setSongVolumeNormal();
+                    mPlayableIntent.setAction(ACTION_AUDIO_GAIN);
+                    sendBroadcast(mPlayableIntent);
                     mBtnPlay.setBackgroundResource(R.drawable.ic_pause);
                     mAnimator.start();
                     break;
@@ -298,7 +399,7 @@ public class PlayerActivity extends AppCompatActivity {
     private boolean checkNotification() {
         NotificationManager notificationManager = (NotificationManager) getApplication().getSystemService(Context.NOTIFICATION_SERVICE);
         StatusBarNotification[] notifications = new StatusBarNotification[0];
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             notifications = notificationManager.getActiveNotifications();
         }
         for (StatusBarNotification notification : notifications) {
@@ -308,5 +409,4 @@ public class PlayerActivity extends AppCompatActivity {
         }
         return false;
     }
-
 }
